@@ -4,6 +4,81 @@ import '../models/game_state.dart';
 import '../models/card.dart';
 import '../widgets/dev_mode_panel.dart';
 
+/// 當鼠標懸停時應用輕微旋轉動畫的 Widget
+///
+/// 包裝子 Widget 並在鼠標進入/離開時應用輕微搖擺動畫
+/// 動畫持續時間 250 毫秒，旋轉角度 ±10 度
+class HoverRotatingCard extends StatefulWidget {
+  final Widget child;
+
+  const HoverRotatingCard({super.key, required this.child});
+
+  @override
+  State<HoverRotatingCard> createState() => _HoverRotatingCardState();
+}
+
+/// 管理旋轉動畫的狀態類
+/// 
+/// 負責動畫控制器的初始化和釋放
+/// 處理鼠標懸停事件並觸發相應動畫
+class _HoverRotatingCardState extends State<HoverRotatingCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    // 初始化動畫控制器，持續時間 250 毫秒
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 250),
+      vsync: this,
+    );
+    
+    // 創建從 0 到 0.1 弧度（約5.7度）的動畫
+    _animation = Tween<double>(begin: 0, end: 0.1).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeInOut,  // 使用緩入緩出曲線使動畫更平滑
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => _controller.forward(),  // 鼠標懸停時正向播放動畫
+      onExit: (_) => _controller.reverse(),   // 鼠標離開時反向播放動畫
+      child: AnimatedBuilder(
+        animation: _animation,
+        builder: (context, child) {
+          // 根據動畫值應用旋轉變換
+          // 此公式會讓角度在動畫過程中先正後負，產生搖擺效果
+          return Transform.rotate(
+            angle: _animation.value * (1 - _animation.value * 2),
+            child: child,
+          );
+        },
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+/// Web版花火遊戲主畫面
+/// 
+/// 負責顯示遊戲主界面，包含：
+/// - 玩家手牌區域
+/// - 已出牌區域
+/// - 遊戲資訊面板
+/// - 操作按鈕區域
+/// - 遊戲記錄顯示
 class WebGameScreen extends StatelessWidget {
   const WebGameScreen({super.key});
 
@@ -12,7 +87,6 @@ class WebGameScreen extends StatelessWidget {
     return Consumer<GameState>(
       builder: (context, gameState, child) {
         if (gameState.isGameOver) {
-          // 延遲顯示遊戲結束對話框，避免在狀態更新時立即彈出
           Future.delayed(Duration.zero, () => _showGameOverDialog(context, gameState));
         }
         
@@ -41,21 +115,9 @@ class WebGameScreen extends StatelessWidget {
               Expanded(
                 child: Row(
                   children: [
-                    // 左側面板 - 遊戲信息和玩家列表
-                    Expanded(
-                      flex: 1,
-                      child: _buildLeftPanel(gameState),
-                    ),
-                    // 中央面板 - 遊戲區域
-                    Expanded(
-                      flex: 3,
-                      child: _buildGameArea(gameState, context),
-                    ),
-                    // 右側面板 - 聊天和操作按鈕
-                    Expanded(
-                      flex: 1,
-                      child: _buildRightPanel(context, gameState),
-                    ),
+                    Expanded(flex: 1, child: _buildLeftPanel(gameState)),
+                    Expanded(flex: 3, child: _buildGameArea(gameState, context)),
+                    Expanded(flex: 1, child: _buildRightPanel(context, gameState)),
                   ],
                 ),
               ),
@@ -109,9 +171,7 @@ class WebGameScreen extends StatelessWidget {
           return Card(
             color: isCurrentPlayer ? Colors.blue.shade100 : null,
             child: ListTile(
-              leading: CircleAvatar(
-                child: Text('P${index + 1}'),
-              ),
+              leading: CircleAvatar(child: Text('P${index + 1}')),
               title: Text('玩家 ${index + 1}'),
               subtitle: Text(isCurrentPlayer ? '當前回合' : '等待中'),
             ),
@@ -149,20 +209,15 @@ class WebGameScreen extends StatelessWidget {
   }
 
   Widget _buildPlayedCardStack(CardColor color, List<HanabiCard> cards) {
-    int topValue = 0;
-    if (cards.isNotEmpty) {
-      topValue = cards.map((c) => c.number).reduce((a, b) => a > b ? a : b);
-    }
-    
+    int topValue = cards.isNotEmpty ? cards.map((c) => c.number).reduce((a, b) => a > b ? a : b) : 0;
     return Column(
       children: [
-        // 顏色標識
         Container(
           width: 120,
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: color.displayColor,
-            borderRadius: BorderRadius.only(
+            borderRadius: const BorderRadius.only(
               topLeft: Radius.circular(8),
               topRight: Radius.circular(8),
             ),
@@ -177,21 +232,18 @@ class WebGameScreen extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
         ),
-        // 卡牌區域
         Container(
           width: 120,
           height: 150,
           decoration: BoxDecoration(
             color: Colors.black.withOpacity(0.05),
-            borderRadius: BorderRadius.only(
+            borderRadius: const BorderRadius.only(
               bottomLeft: Radius.circular(8),
               bottomRight: Radius.circular(8),
             ),
             border: Border.all(color: color.displayColor),
           ),
-          child: cards.isEmpty 
-              ? _buildFireworkPlaceholder() 
-              : _buildFireworkDisplay(topValue, color),
+          child: cards.isEmpty ? _buildFireworkPlaceholder() : _buildFireworkDisplay(topValue, color),
         ),
       ],
     );
@@ -210,7 +262,6 @@ class WebGameScreen extends StatelessWidget {
   Widget _buildFireworkDisplay(int value, CardColor color) {
     return Stack(
       children: [
-        // 中心數字
         Center(
           child: Text(
             value.toString(),
@@ -221,7 +272,6 @@ class WebGameScreen extends StatelessWidget {
             ),
           ),
         ),
-        // 煙火效果
         ...List.generate(value * 2, (index) {
           final angle = index * 45.0;
           final length = 20.0 + (index % 3) * 10.0;
@@ -265,112 +315,110 @@ class WebGameScreen extends StatelessWidget {
     Color cardColor = card.hints['color'] == true ? card.color.displayColor : Colors.white;
     Color textColor = card.hints['color'] == true ? card.color.textColor : Colors.black;
     
-    return GestureDetector(
-      onTap: () {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('選擇操作'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.play_arrow),
-                  title: const Text('打出這張牌'),
-                  onTap: () {
-                    gameState.playCard(gameState.currentPlayer, index);
-                    Navigator.pop(context);
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.delete),
-                  title: const Text('棄掉這張牌'),
-                  onTap: () {
-                    gameState.discardCard(gameState.currentPlayer, index);
-                    Navigator.pop(context);
-                  },
+    return HoverRotatingCard(
+      child: GestureDetector(
+        onTap: () {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('選擇操作'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.play_arrow),
+                    title: const Text('打出這張牌'),
+                    onTap: () {
+                      gameState.playCard(gameState.currentPlayer, index);
+                      Navigator.pop(context);
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.delete),
+                    title: const Text('棄掉這張牌'),
+                    onTap: () {
+                      gameState.discardCard(gameState.currentPlayer, index);
+                      Navigator.pop(context);
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('取消'),
                 ),
               ],
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('取消'),
+          );
+        },
+        child: Container(
+          width: 100,
+          height: 150,
+          margin: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            color: cardColor,
+            border: Border.all(color: Colors.black),
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.grey.withOpacity(0.5),
+                spreadRadius: 1,
+                blurRadius: 5,
+                offset: const Offset(0, 2),
               ),
             ],
-          ),
-        );
-      },
-      child: Container(
-        width: 100,
-        height: 150,
-        margin: const EdgeInsets.symmetric(horizontal: 8),
-        decoration: BoxDecoration(
-          color: cardColor,
-          border: Border.all(color: Colors.black),
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.5),
-              spreadRadius: 1,
-              blurRadius: 5,
-              offset: const Offset(0, 2),
+            image: const DecorationImage(
+              image: AssetImage('assets/images/背卡封面.webp'),
+              fit: BoxFit.cover,
             ),
-          ],
-          image: const DecorationImage(
-            image: AssetImage('assets/images/背卡封面.webp'),
-            fit: BoxFit.cover,
           ),
-        ),
-        child: Stack(
-          children: [
-            // 如果有提示，顯示卡牌內容
-            if (card.hints['color'] == true || card.hints['number'] == true)
-              Container(
-                decoration: BoxDecoration(
-                  color: cardColor.withOpacity(0.9),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    if (card.hints['number'] == true)
-                      Text(
-                        card.number.toString(),
-                        style: TextStyle(
-                          fontSize: 64,
-                          fontWeight: FontWeight.bold,
-                          color: textColor,
-                        ),
-                      )
-                    else
-                      const Text('?', 
-                        style: TextStyle(
-                          fontSize: 64, 
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    
-                    // 卡牌角落的小煙火
-                    if (card.hints['number'] == true)
-                      ...List.generate(card.number, (i) => 
-                        Positioned(
-                          top: 5 + i * 20,
-                          right: 5,
-                          child: Icon(
-                            Icons.auto_awesome,
-                            size: 12,
+          child: Stack(
+            children: [
+              if (card.hints['color'] == true || card.hints['number'] == true)
+                Container(
+                  decoration: BoxDecoration(
+                    color: cardColor.withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (card.hints['number'] == true)
+                        Text(
+                          card.number.toString(),
+                          style: TextStyle(
+                            fontSize: 64,
+                            fontWeight: FontWeight.bold,
                             color: textColor,
                           ),
+                        )
+                      else
+                        const Text('?', 
+                          style: TextStyle(
+                            fontSize: 64, 
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
-                    
-                    const SizedBox(height: 16),
-                    const Text('點擊使用', style: TextStyle(fontSize: 14)),
-                  ],
+                      if (card.hints['number'] == true)
+                        ...List.generate(card.number, (i) => 
+                          Positioned(
+                            top: 5 + i * 20,
+                            right: 5,
+                            child: Icon(
+                              Icons.auto_awesome,
+                              size: 12,
+                              color: textColor,
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 16),
+                      const Text('點擊使用', style: TextStyle(fontSize: 14)),
+                    ],
+                  ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -386,7 +434,7 @@ class WebGameScreen extends StatelessWidget {
         children: [
           _buildActionButtons(context, gameState),
           const Divider(),
-          _buildChatArea(),
+          _buildChatArea(context, gameState),
         ],
       ),
     );
@@ -403,55 +451,51 @@ class WebGameScreen extends StatelessWidget {
             minimumSize: const Size(double.infinity, 50),
           ),
         ),
-        
-        
       ],
     );
   }
 
-  Widget _buildChatArea() {
-    return Consumer<GameState>(
-      builder: (context, gameState, child) => Expanded(
-        child: Card(
-          child: Column(
-            children: [
-              const Padding(
-                padding: EdgeInsets.all(8.0),
-                child: Text('遊戲記錄', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+  Widget _buildChatArea(BuildContext context, GameState gameState) {
+    return Expanded(
+      child: Card(
+        child: Column(
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(8.0),
+              child: Text('遊戲記錄', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+            const Divider(),
+            Expanded(
+              child: ListView.builder(
+                itemCount: gameState.gameLog.length,
+                itemBuilder: (context, index) {
+                  return ListTile(
+                    title: Text(gameState.gameLog[index]),
+                    dense: true,
+                  );
+                },
               ),
-              const Divider(),
-              Expanded(
-                child: ListView.builder(
-                  itemCount: gameState.gameLog.length,
-                  itemBuilder: (context, index) {
-                    return ListTile(
-                      title: Text(gameState.gameLog[index]),
-                      dense: true,
-                    );
-                  },
+            ),
+            if (gameState.isGameOver)
+              Container(
+                padding: const EdgeInsets.all(8),
+                color: Colors.red.shade100,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '遊戲結束：${gameState.gameEndReason}\n最終得分：${gameState.score}',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => _showGameOverDialog(context, gameState),
+                      child: const Text('查看詳情'),
+                    ),
+                  ],
                 ),
               ),
-              if (gameState.isGameOver)
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  color: Colors.red.shade100,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '遊戲結束：${gameState.gameEndReason}\n最終得分：${gameState.score}',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () => _showGameOverDialog(context, gameState),
-                        child: const Text('查看詳情'),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
+          ],
         ),
       ),
     );
@@ -541,13 +585,13 @@ class WebGameScreen extends StatelessWidget {
                           children: CardColor.values
                               .where((c) => c != CardColor.rainbow)
                               .map((color) => Container(
-                                    margin: EdgeInsets.all(4),
+                                    margin: const EdgeInsets.all(4),
                                     child: ElevatedButton(
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: color.displayColor,
                                         foregroundColor: color.textColor,
-                                        shape: CircleBorder(),
-                                        padding: EdgeInsets.all(16),
+                                        shape: const CircleBorder(),
+                                        padding: const EdgeInsets.all(16),
                                       ),
                                       onPressed: () {
                                         setState(() {
@@ -556,8 +600,8 @@ class WebGameScreen extends StatelessWidget {
                                         });
                                       },
                                       child: selectedColor == color
-                                          ? Icon(Icons.check)
-                                          : SizedBox(width: 20, height: 20),
+                                          ? const Icon(Icons.check)
+                                          : const SizedBox(width: 20, height: 20),
                                     ),
                                   ))
                               .toList(),
@@ -582,8 +626,8 @@ class WebGameScreen extends StatelessWidget {
                                       backgroundColor: selectedNumber == number
                                           ? Colors.blue
                                           : Colors.grey,
-                                      shape: CircleBorder(),
-                                      padding: EdgeInsets.all(16),
+                                      shape: const CircleBorder(),
+                                      padding: const EdgeInsets.all(16),
                                     ),
                                     onPressed: () {
                                       setState(() {
@@ -607,8 +651,7 @@ class WebGameScreen extends StatelessWidget {
               onPressed: () => Navigator.pop(context),
               child: const Text('取消'),
             ),
-            if (selectedPlayer != null &&
-                (selectedColor != null || selectedNumber != null))
+            if (selectedPlayer != null && (selectedColor != null || selectedNumber != null))
               TextButton(
                 onPressed: () {
                   gameState.giveHint(
@@ -622,126 +665,6 @@ class WebGameScreen extends StatelessWidget {
               ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildCardInDialog(HanabiCard card, {bool showDiscard = false}) {
-    Color cardColor = card.hints['color'] == true ? card.color.displayColor : Colors.white;
-    Color textColor = card.hints['color'] == true ? card.color.textColor : Colors.black;
-    
-    return Card(
-      color: Colors.transparent,
-      child: Container(
-        decoration: BoxDecoration(
-          image: const DecorationImage(
-            image: AssetImage('assets/images/背卡封面.webp'),
-            fit: BoxFit.cover,
-          ),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: ListTile(
-          tileColor: card.hints['color'] == true ? cardColor.withOpacity(0.9) : Colors.white.withOpacity(0.9),
-          leading: CircleAvatar(
-            backgroundColor: Colors.white,
-            child: Icon(
-              showDiscard ? Icons.delete : Icons.play_arrow,
-              color: Colors.black,
-            ),
-          ),
-          title: Text(
-            card.hints['number'] == true ? '數字 ${card.number}' : '未知數字',
-            style: TextStyle(
-              color: card.hints['color'] == true ? card.color.textColor : Colors.black,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          trailing: Icon(
-            showDiscard ? Icons.delete : Icons.auto_awesome,
-            color: card.hints['color'] == true ? card.color.textColor : Colors.black,
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showPlayCardDialog(BuildContext context, GameState gameState) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('選擇要出的牌'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: gameState.playerHands[gameState.currentPlayer].length,
-            itemBuilder: (context, index) {
-              var card = gameState.playerHands[gameState.currentPlayer][index];
-              return InkWell(
-                onTap: () {
-                  gameState.playCard(gameState.currentPlayer, index);
-                  Navigator.pop(context);
-                },
-                child: _buildCardInDialog(card),
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showDiscardDialog(BuildContext context, GameState gameState) {
-    if (gameState.hints >= 8) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('無法棄牌'),
-          content: const Text('提示標記已達最大值(8)，無法棄牌。'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('確定'),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('選擇要棄掉的牌'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: gameState.playerHands[gameState.currentPlayer].length,
-            itemBuilder: (context, index) {
-              var card = gameState.playerHands[gameState.currentPlayer][index];
-              return InkWell(
-                onTap: () {
-                  gameState.discardCard(gameState.currentPlayer, index);
-                  Navigator.pop(context);
-                },
-                child: _buildCardInDialog(card, showDiscard: true),
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-        ],
       ),
     );
   }

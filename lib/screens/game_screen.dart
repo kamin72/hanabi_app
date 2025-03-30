@@ -3,6 +3,13 @@ import 'package:provider/provider.dart';
 import '../models/game_state.dart';
 import '../models/card.dart';
 
+/// 花火遊戲主畫面 (原生版)
+///
+/// 包含以下主要功能：
+/// - 顯示遊戲基本資訊（分數、提示次數、失誤次數）
+/// - 已出牌區域展示
+/// - 玩家手牌處理
+/// - 遊戲操作按鈕（提示、出牌、棄牌）
 class GameScreen extends StatelessWidget {
   const GameScreen({super.key});
 
